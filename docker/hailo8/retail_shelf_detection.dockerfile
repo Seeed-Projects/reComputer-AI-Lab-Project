@@ -26,5 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-CMD ["python", "app/infer_video_hailo.py", "--config", "configs/runtime.json"]
+EXPOSE 8000
 
+CMD ["python", "web_detection.py", "--config", "configs/runtime.json", "--host", "0.0.0.0", "--port", "8000"]

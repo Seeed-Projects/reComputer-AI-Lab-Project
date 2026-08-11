@@ -4,5 +4,3 @@
 **/.venv/
 **/outputs/*
 !**/outputs/.gitkeep
-**/hailort-packages/*.whl
-
