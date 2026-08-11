@@ -159,15 +159,22 @@ class ShelfWebRuntime:
             if frame is None:
                 continue
             height, width = frame.shape[:2]
-            if (
-                self.preview_width > 0
-                and self.preview_height > 0
-                and (width, height) != (self.preview_width, self.preview_height)
-            ):
+            if self.preview_width > 0 and self.preview_height > 0:
+                # Treat preview_width/height as a bounding box. The demo video
+                # carries a -90 degree display rotation and OpenCV exposes it as
+                # 720x1280, so forcing 1280x720 would visibly stretch products.
+                scale = min(
+                    self.preview_width / width,
+                    self.preview_height / height,
+                )
+                preview_size = (
+                    max(1, int(round(width * scale))),
+                    max(1, int(round(height * scale))),
+                )
                 preview = cv2.resize(
                     frame,
-                    (self.preview_width, self.preview_height),
-                    interpolation=cv2.INTER_AREA,
+                    preview_size,
+                    interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR,
                 )
             else:
                 preview = frame
@@ -462,10 +469,10 @@ async def index() -> str:
     header { padding: 24px 32px; border-bottom: 1px solid #28302d; }
     h1 { margin: 0; color: #9de35a; font-size: clamp(22px, 4vw, 34px); }
     header p { margin: 8px 0 0; color: #aab5b0; }
-    main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; padding: 20px; }
+    main { display: grid; grid-template-columns: minmax(360px, 900px) minmax(320px, 520px); justify-content: center; gap: 20px; padding: 20px; }
     .card { background: #171d1a; border: 1px solid #2b3530; border-radius: 14px; overflow: hidden; }
     .stream { min-height: 320px; display: grid; place-items: center; background: #050706; }
-    .stream img { width: 100%; height: auto; display: block; }
+    .stream img { max-width: 100%; max-height: 78vh; width: auto; height: auto; object-fit: contain; display: block; }
     .panel { padding: 18px; }
     .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .metric { background: #202824; border-radius: 9px; padding: 12px; }
@@ -528,8 +535,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--video_path", type=Path, help="override the video path from config")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--preview_width", type=int, default=1280)
-    parser.add_argument("--preview_height", type=int, default=720)
+    parser.add_argument("--preview_width", type=int, default=1280, help="maximum preview width")
+    parser.add_argument("--preview_height", type=int, default=720, help="maximum preview height")
     parser.add_argument("--jpeg_quality", type=int, default=80)
     parser.add_argument("--target_fps", type=float, default=0.0, help="0 means uncapped")
     parser.add_argument("--no-loop", action="store_true", help="stop at the end of the video")
