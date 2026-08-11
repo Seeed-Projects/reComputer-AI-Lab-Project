@@ -1,0 +1,15 @@
+{
+  "board": "Raspberry Pi 5",
+  "os": "Debian GNU/Linux 13 (trixie)",
+  "architecture": "aarch64",
+  "python": "3.13.5",
+  "accelerator": "Hailo-8 M.2 Key M 2280",
+  "hailo_arch": "hailo8",
+  "hailort": "4.23.0",
+  "firmware": "4.23.0",
+  "recommended_conversion_stack": {
+    "host": "x86_64 Linux",
+    "dataflow_compiler": "3.33.0",
+    "hailo_model_zoo": "2.17.0"
+  }
+}

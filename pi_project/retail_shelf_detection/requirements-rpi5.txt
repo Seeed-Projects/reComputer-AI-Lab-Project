@@ -1,0 +1,3 @@
+# HailoRT, OpenCV and NumPy are installed as Debian packages by install_rpi5.sh.
+# The venv uses --system-site-packages so it can import Python 3.13 pyHailoRT.
+
