@@ -1,0 +1,23 @@
+# Intermediate / conversion artefacts — excluded from the Docker build context.
+conversion/
+pothole-deploy/
+pothole-deploy-clean/
+output/frames/
+output/*.json
+output/*.mp4
+Ultralytics/
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+.git/
+.gitignore
+*.log
+*.pid
+*.har
+models/onnx/pothole_yolov8m.onnx
+models/source_pt/pothole_yolov8.pt
+models/hef/allocator.log
+models/hef/hailo_sdk.core*.log
+# Keep: models/hef/pothole_yolov8n_hailo8.hef, models/onnx/pothole_yolov8n.onnx,
+#        models/source_pt/pothole_yolov8n.pt, input/demo.mp4, hailort-packages/
