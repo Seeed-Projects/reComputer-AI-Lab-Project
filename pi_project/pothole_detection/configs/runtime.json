@@ -1,0 +1,25 @@
+{
+  "source": "input/demo.mp4",
+  "output": "outputs/pothole_demo_hailo8.mp4",
+  "loop_video": true,
+  "model": {
+    "path": "models/hef/pothole_yolov8n_hailo8.hef",
+    "imgsz": 640,
+    "confidence": 0.18,
+    "iou": 0.55,
+    "input_mode": "uint8"
+  },
+  "road_roi": {
+    "enabled": true,
+    "horizon_y": 0.18,
+    "horizon_left": 0.22,
+    "horizon_right": 0.78
+  },
+  "temporal": {
+    "match_iou": 0.18,
+    "min_hits": 2,
+    "max_missed": 3,
+    "strong_confidence": 0.55
+  },
+  "codec": "mp4v"
+}
