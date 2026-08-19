@@ -9,6 +9,15 @@ logger = logging.getLogger("runtime.hailo_detector")
 
 
 class HailoDetector:
+    """Synchronous HailoRT 4.x detector wrapper.
+
+    A shared VDevice with an explicit ROUND_ROBIN scheduler keeps the configured
+    network group activated while host threads drive InferVStreams.
+    """
+
+    _shared_device = None
+    _shared_users = 0
+
     def __init__(self, model_path: str | Path, imgsz: int, conf: float, iou: float,
                  input_mode: str = "uint8") -> None:
         self.model_path = Path(model_path)
@@ -20,13 +29,18 @@ class HailoDetector:
         if self.input_mode not in {"float32", "uint8"}:
             raise ValueError("input_mode must be float32 or uint8")
         try:
-            from hailo_platform import (ConfigureParams, FormatType, HEF, HailoStreamInterface,
-                InferVStreams, InputVStreamParams, OutputVStreamParams, VDevice)
+            from hailo_platform import (ConfigureParams, FormatType, HEF, HailoSchedulingAlgorithm,
+                HailoStreamInterface, InferVStreams, InputVStreamParams, OutputVStreamParams, VDevice)
         except ImportError as exc:
             raise RuntimeError("pyHailoRT is unavailable; install the matching HailoRT 4.23 package") from exc
 
         self._format = FormatType.FLOAT32 if self.input_mode == "float32" else FormatType.UINT8
-        self._vdevice = VDevice()
+        if HailoDetector._shared_device is None:
+            device_params = VDevice.create_params()
+            device_params.scheduling_algorithm = HailoSchedulingAlgorithm.ROUND_ROBIN
+            HailoDetector._shared_device = VDevice(device_params)
+        HailoDetector._shared_users += 1
+        self._vdevice = HailoDetector._shared_device
         self._hef = HEF(str(self.model_path))
         params = ConfigureParams.create_from_hef(self._hef, interface=HailoStreamInterface.PCIe)
         groups = self._vdevice.configure(self._hef, params)
@@ -71,12 +85,17 @@ class HailoDetector:
         return postprocess_auto(outputs, height, width, self.conf, self.iou, self.imgsz)
 
     def release(self) -> None:
-        if getattr(self, "_context", None) is not None:
-            self._context.__exit__(None, None, None)
+        context = getattr(self, "_context", None)
+        if context is not None:
+            context.__exit__(None, None, None)
             self._context = None
         if getattr(self, "_vdevice", None) is not None:
-            if hasattr(self._vdevice, "release"):
-                self._vdevice.release()
+            HailoDetector._shared_users = max(0, HailoDetector._shared_users - 1)
+            if HailoDetector._shared_users == 0:
+                device = HailoDetector._shared_device
+                if device is not None and hasattr(device, "release"):
+                    device.release()
+                HailoDetector._shared_device = None
             self._vdevice = None
 
     def __enter__(self):

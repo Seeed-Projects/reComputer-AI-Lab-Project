@@ -35,8 +35,9 @@ def parse_source(value: str):
 
 
 class WebRuntime:
-    def __init__(self, cfg: dict, source: str):
+    def __init__(self, cfg: dict, source: str, device: str = "hailo"):
         self.cfg, self.source = cfg, parse_source(source)
+        self.device = device
         self.stop_event = Event()
         self.condition = Condition()
         self.status_lock = Lock()
@@ -45,7 +46,7 @@ class WebRuntime:
         self.worker = None
         self._started = False
         self.status_data = {
-            "running": False, "source": str(source), "fps": 0.0,
+            "running": False, "source": str(source), "device": device, "fps": 0.0,
             "frame": 0, "raw_detections": 0, "visible_tracks": 0,
             "direct_detections": 0, "tracked_only": 0,
             "cumulative_events": 0, "error": None,
@@ -80,13 +81,24 @@ class WebRuntime:
             if frame:
                 yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
+    def _make_processor(self):
+        if self.device == "cpu":
+            from runtime.ultralytics_detector import UltralyticsDetector
+            model_cfg = self.cfg["model"]
+            detector = UltralyticsDetector(
+                resolve(model_cfg.get("pt_path", "models/source_pt/pothole_yolov8n.pt")),
+                model_cfg["imgsz"], model_cfg["confidence"], model_cfg["iou"],
+                model_cfg.get("input_mode", "uint8"))
+            return PotholeProcessor(self.cfg, ROOT, detector=detector)
+        return PotholeProcessor(self.cfg, ROOT)
+
     def _loop(self):
         cap = processor = None
         try:
             cap = cv2.VideoCapture(self.source)
             if not cap.isOpened():
                 raise RuntimeError(f"cannot open source: {self.source}")
-            processor = PotholeProcessor(self.cfg, ROOT)
+            processor = self._make_processor()
             self.update(running=True)
             frame_id, fps_ema = 0, 0.0
             previous = time.perf_counter()
@@ -104,8 +116,9 @@ class WebRuntime:
                 fps_ema = instant if not fps_ema else 0.9 * fps_ema + 0.1 * instant
                 frame_id += 1
                 cv2.rectangle(annotated, (10, 10), (420, 100), (20, 20, 20), -1)
-                cv2.putText(annotated, f"Hailo-8 FPS {fps_ema:.1f}", (22, 34),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.70, (90, 255, 130), 2, cv2.LINE_AA)
+                cv2.putText(annotated,
+                            f"{'CPU YOLOv8n' if self.device == 'cpu' else 'Hailo-8'} FPS {fps_ema:.1f}",
+                            (22, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.70, (90, 255, 130), 2, cv2.LINE_AA)
                 cv2.putText(annotated, f"potholes={values['visible_tracks']}  cumulative={values['cumulative_events']}",
                             (22, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 210, 60), 2, cv2.LINE_AA)
                 cv2.putText(annotated, "yellow=tracked(gap-fill)", (22, 90),
@@ -188,6 +201,8 @@ def main() -> int:
     parser.add_argument("--source", help="video file, RTSP URL, or camera index")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--device", default="hailo", choices=["hailo", "cpu"],
+                        help="hailo = Hailo-8 (Pi); cpu = Ultralytics demo on PC without Hailo")
     parser.add_argument("--no-loop", action="store_true", help="stop at end of video")
     parser.add_argument("--check-config", action="store_true",
                         help="validate config without loading HailoRT")
@@ -206,9 +221,9 @@ def main() -> int:
         logger.info("web configuration is valid; HailoRT was not loaded")
         return 0
     cfg["loop_video"] = cfg.get("loop_video", True) and not args.no_loop
-    runtime = WebRuntime(cfg, args.source or str(cfg["source"]))
+    runtime = WebRuntime(cfg, args.source or str(cfg["source"]), device=args.device)
     runtime.start()
-    logger.info("web preview: http://%s:%d", args.host, args.port)
+    logger.info("web preview (device=%s): http://%s:%d", args.device, args.host, args.port)
     try:
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     finally:

@@ -21,13 +21,16 @@ def in_road_roi(box, width: int, height: int, cfg: dict) -> bool:
 
 
 class PotholeProcessor:
-    def __init__(self, cfg: dict, root: Path):
+    def __init__(self, cfg: dict, root: Path, detector=None):
         model_cfg = cfg["model"]
-        model_path = Path(model_cfg["path"])
-        if not model_path.is_absolute():
-            model_path = root / model_path
-        self.detector = HailoDetector(model_path, model_cfg["imgsz"], model_cfg["confidence"],
-                                      model_cfg["iou"], model_cfg.get("input_mode", "uint8"))
+        if detector is not None:
+            self.detector = detector
+        else:
+            model_path = Path(model_cfg["path"])
+            if not model_path.is_absolute():
+                model_path = root / model_path
+            self.detector = HailoDetector(model_path, model_cfg["imgsz"], model_cfg["confidence"],
+                                          model_cfg["iou"], model_cfg.get("input_mode", "uint8"))
         self.roi_cfg = cfg.get("road_roi", {})
         self.tracker = TemporalTracker(**cfg.get("temporal", {}))
 
