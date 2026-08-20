@@ -1,0 +1,11 @@
+{
+  "board": "Raspberry Pi 5",
+  "architecture": "aarch64",
+  "accelerator": "Hailo-8 M.2 Key M 2280",
+  "hailo_arch": "hailo8",
+  "hailort": "4.23.0",
+  "conversion_host": "x86_64 Ubuntu/WSL2",
+  "dataflow_compiler": "3.33.1",
+  "hailo_model_zoo": "2.17.0",
+  "source_project": "RK3576 Abandoned Luggage (PC port)"
+}

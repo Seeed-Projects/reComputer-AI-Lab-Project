@@ -10,12 +10,14 @@ under `docker/`.
 | --- | --- | --- |
 | [Retail Shelf Detection](pi_project/retail_shelf_detection/README.md) | Raspberry Pi 5 + Hailo-8 | Product detection, inventory tracking, pickup events, and low-stock alerts from video |
 | [Pothole Detection](pi_project/pothole_detection/README.md) | Raspberry Pi 5 + Hailo-8 | Road pothole detection from video with ROI filtering, temporal tracking, and gap-fill display |
+| [Abandoned Luggage Detection](pi_project/abandoned_luggage/README.md) | Raspberry Pi 5 + Hailo-8 | YOLO11m-based abandoned luggage detection with owner association, static persistence, and alarm hold |
 
 Published containers:
 
 ```text
 ghcr.io/seeed-projects/recomputer-ai-lab-project/retail_shelf_detection:latest
 ghcr.io/seeed-projects/recomputer-ai-lab-project/pothole_detection:latest
+ghcr.io/seeed-projects/recomputer-ai-lab-project/abandoned_luggage:latest
 ```
 
 ## Container definitions

@@ -1,0 +1,28 @@
+{
+  "source": "input/demo.mp4",
+  "output": "outputs/abandoned_demo_hailo8.mp4",
+  "loop_video": true,
+  "model": {
+    "path": "models/hef/yolov11m_abandoned_hailo8.hef",
+    "imgsz": 640,
+    "confidence": 0.25,
+    "iou": 0.7,
+    "input_mode": "uint8"
+  },
+  "roi": {
+    "enabled": true,
+    "rect": [200, 200, 1100, 800]
+  },
+  "abandonment": {
+    "dist_threshold": 200,
+    "time_threshold": 5,
+    "alarm_hold": 5,
+    "bag_persistence_frames": 300,
+    "person_class": 0,
+    "bag_classes": [24, 26, 28]
+  },
+  "tracking": {
+    "match_iou": 0.25
+  },
+  "codec": "mp4v"
+}
