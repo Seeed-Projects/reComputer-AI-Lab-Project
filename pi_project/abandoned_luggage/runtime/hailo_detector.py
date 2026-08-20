@@ -80,7 +80,14 @@ class HailoDetector:
             image = image.astype(np.float32)
         outputs = self._pipeline.infer({self._input_name: image[None, ...]})
         if not self._printed_shapes:
-            logger.info("output tensors: %s", {k: tuple(np.asarray(v).shape) for k, v in outputs.items()})
+            # Hailo NMS output is a ragged object array (1, C) — log shapes safely.
+            shapes = {}
+            for k, v in outputs.items():
+                try:
+                    shapes[k] = tuple(np.shape(v))
+                except Exception:  # noqa: BLE001 — ragged/object layout
+                    shapes[k] = "ragged-object-array"
+            logger.info("output tensors: %s", shapes)
             self._printed_shapes = True
         return postprocess_auto(outputs, height, width, self.conf, self.iou, self.imgsz)
 

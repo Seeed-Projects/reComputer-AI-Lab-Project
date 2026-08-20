@@ -55,10 +55,21 @@ def postprocess_hailo_nms(output, img_h: int, img_w: int, conf: float, iou: floa
     """
     value = output
     if isinstance(value, np.ndarray) and value.dtype == object:
-        rows = [np.asarray(item) for item in value.reshape(-1)]
-        value = np.concatenate(
-            [row.reshape(-1, row.shape[-1]) for row in rows if row.size], axis=0
-        ) if rows else np.empty((0, 5))
+        # HailoRT NMS layout for C classes: object array of shape (1, C)
+        # (or (C,)); element c holds proposals (N_c, 5) in YXYX+score order.
+        arr = value
+        while arr.ndim > 1 and arr.shape[0] == 1:
+            arr = arr[0]
+        chunks = []
+        for c, item in enumerate(arr):
+            if item is None:
+                continue
+            rows = np.asarray(item)
+            if rows.ndim == 0 or rows.size == 0:
+                continue
+            rows = rows.reshape(-1, rows.shape[-1])
+            chunks.append(np.column_stack((rows, np.full((rows.shape[0], 1), float(c)))))
+        value = np.concatenate(chunks, axis=0) if chunks else np.empty((0, 6))
 
     pred = np.asarray(value)
     if pred.size == 0:

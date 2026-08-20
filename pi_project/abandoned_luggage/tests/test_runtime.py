@@ -75,6 +75,23 @@ class PrePostProcessTests(unittest.TestCase):
         boxes, scores, cids = postprocess_hailo_nms(np.array([]), 640, 640, 0.2, 0.5, 640)
         self.assertEqual((boxes, scores, cids), ([], [], []))
 
+    def test_nms_object_array_preserves_class(self):
+        """Real HailoRT NMS layout: object array (1, C), element = (N_c, 5)."""
+        obj = np.empty((1, 80), dtype=object)
+        obj[0, 0] = np.array([[0.10, 0.10, 0.20, 0.20, 0.9]])    # person
+        obj[0, 5] = np.array([[0.50, 0.50, 0.70, 0.70, 0.7]])    # bus
+        obj[0, 24] = np.array([[0.30, 0.30, 0.45, 0.45, 0.8]])   # backpack
+        obj[0, 28] = np.array([[0.60, 0.20, 0.75, 0.40, 0.85]])  # suitcase
+        boxes, scores, cids = postprocess_hailo_nms(obj, 640, 640, 0.2, 0.5, 640)
+        self.assertEqual(sorted(cids), [0, 5, 24, 28])
+        self.assertEqual(len(boxes), 4)
+
+    def test_nms_object_array_with_empty_classes(self):
+        obj = np.empty((1, 80), dtype=object)  # unassigned slots stay None
+        obj[0, 24] = np.array([[0.2, 0.2, 0.4, 0.4, 0.9]])
+        boxes, scores, cids = postprocess_hailo_nms(obj, 640, 640, 0.2, 0.5, 640)
+        self.assertEqual(cids, [24])
+
     def test_postprocess_auto_routes(self):
         output = {"yolov11m_nms_postprocess": np.array([[[0.2, 0.2, 0.4, 0.4, 0.8, 28.0]]])}
         boxes, scores, cids = postprocess_auto(output, 640, 640, 0.2, 0.5, 640)
