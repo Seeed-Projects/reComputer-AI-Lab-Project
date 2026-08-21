@@ -27,28 +27,19 @@ RaspberryPi5-Hailo8-abandoned-luggage/
 ├── app/
 │   └── infer_video_hailo.py      # 视频推理入口
 ├── abandoned_monitor/            # 移植自原 RK3576 项目 abandoned_detection_v2.py
-│   ├── processor.py              # 帧处理流水线（检测→ROI→跟踪→owner→遗弃判定→绘制）
+│   ├── processor.py              # 参考算法移植（检测→跟踪→owner→遗弃判定→绘制）
 │   └── tracker.py                # IoU 跟踪器（替代 ByteTrack，按类别分 ID 空间）
 ├── configs/
 │   ├── runtime.json              # 运行时配置
 │   └── device_target.json
-├── conversion/                   # 模型转换（PT→ONNX→HEF），见 SOP
-│   ├── calibration/              # 从演示视频抽取的 136 张校准图
-│   ├── hailO_config/             # yolov11m NMS JSON + ALLS
-│   ├── logs/                     # 编译日志
-│   └── prepare_calibration.py
 ├── input/demo.mp4                # 演示视频（原项目 test2.mp4，ROI 匹配）
-├── models/
-│   ├── source_pt/yolo11m.pt
-│   ├── onnx/yolo11m.onnx         # opset 11 静态 640，无 NMS
-│   └── hef/yolov11m_abandoned_hailo8.hef   # 转换产物
+├── models/hef/yolov11m_abandoned_hailo8.hef
 ├── runtime/
 │   ├── hailo_detector.py         # HailoRT 推理（共享 VDevice + ROUND_ROBIN）
 │   ├── yolo_postprocess.py       # 80 类 Hailo NMS 解码（含类别识别）
 │   └── ultralytics_detector.py   # CPU 演示模式（PC 无 Hailo）
 ├── scripts/
-│   ├── install_rpi5.sh / probe.sh / run_demo.sh / docker_run.sh
-│   └── compile_yolov11m_hef.sh   # HEF 编译脚本（WSL 内执行）
+│   └── install_rpi5.sh / probe.sh / run_demo.sh / docker_run.sh
 ├── tools/ check_deployment.py / probe_hailo.py
 ├── tests/ test_runtime.py        # 无硬件单元测试
 ├── web_detection.py              # FastAPI/MJPEG Web 预览
@@ -61,12 +52,12 @@ RaspberryPi5-Hailo8-abandoned-luggage/
 
 1. **检测**：YOLO11m 检测 COCO-80；只保留 person(0)、backpack(24)、handbag(26)、suitcase(28)
 2. **ROI 过滤**：仅处理矩形 ROI 内中心点的检测（默认 `[200,200,1100,800]`，对应 1920×1080）
-3. **跟踪**：IoU 跟踪器按类别分配持久 ID（Hailo NMS 无跟踪 ID，替代原 ByteTrack）
+3. **跟踪**：IoU 跟踪器按类别分配持久 ID（Hailo NMS 无跟踪 ID，替代原 ByteTrack）；丢失轨迹只用于重新接回 ID
 4. **Owner 关联**：每个行李关联最近的人
 5. **遗弃判定**：owner 距离 > `dist_threshold`(200px) **或** owner 消失，
-   持续 > `time_threshold`(5s) → 报警
-6. **静态持久化**：行李短暂丢失时保持最后位置最多 `bag_persistence_frames`(300帧)
-7. **报警保持**：触发后保持 `alarm_hold`(5s) 防闪烁
+   持续 > `time_threshold`(2s，演示默认) → 报警
+6. **静态行李**：行李短时漏检时保持最后位置最多 `bag_persistence_frames`(300帧)，人物不做持久化
+7. **输出**：只绘制当前帧人物和当前/持久化行李，避免把丢失人物轨迹误画成重复框
 
 ### 框颜色
 
@@ -75,7 +66,7 @@ RaspberryPi5-Hailo8-abandoned-luggage/
 | 黄色粗框 | ROI 区域 |
 | 橙色 (255,200,0) | 人 (Person N) |
 | 绿色 | 正常行李 |
-| 黄色细框 | 静态持久化（当前帧未检测到，保持位置） |
+| 黄色细框 | 行李短时漏检后的持久化位置 |
 | 红色 | 遗弃报警（ABANDONED!） |
 
 ---
@@ -88,25 +79,8 @@ RaspberryPi5-Hailo8-abandoned-luggage/
 | 类别 | COCO-80（逻辑使用 person/backpack/handbag/suitcase） |
 | 输入 | 640×640 RGB uint8 |
 | 输出 | Hailo NMS（6 列或类别网格，含 class_id） |
-| ONNX | `models/onnx/yolo11m.onnx`（opset 11，静态，无 NMS） |
-| 转换流水线 | PT → ONNX → HAR → HEF，参考 `D:\Python Code\SOP_YOLO_PT_TO_ONNX_TO_HAILO8_HEF.md` |
 
----
-
-## HEF 编译（在 WSL 中）
-
-```bash
-# 1. 导出 ONNX（Windows）已生成：models/onnx/yolo11m.onnx
-# 2. 校准集已生成：conversion/calibration（136 张）
-
-wsl.exe -d Ubuntu-22.04 -u seeed
-source ~/.venvs/retail-hailo-dfc/bin/activate
-bash "/mnt/d/Python Code/RaspberryPi5-Hailo8-abandoned-luggage/scripts/compile_yolov11m_hef.sh"
-```
-
-日志：`conversion/logs/yolov11m_abandoned.log`，产物：`models/hef/yolov11m_abandoned_hailo8.hef`
-
-> 注意：m 级模型在纯 CPU 编译环境的分区搜索可能耗时较长（数小时），正常现象。
+仓库只保留树莓派运行所需的 HEF 和源码；模型转换过程、日志和推理输出不属于部署包。
 
 ---
 
@@ -153,7 +127,7 @@ sudo docker build -f docker/hailo8/abandoned_luggage.dockerfile -t abandoned-lug
 ./scripts/docker_run.sh video   # 视频推理
 ```
 
-`docker_run.sh` 映射 `/dev/hailo0`、`input/`、`output/`、`configs/` 和 `libhailort.so`。
+`docker_run.sh` 映射 `/dev/hailo0`、`input/`、`outputs/`、`configs/` 和 `libhailort.so`。
 
 ---
 
@@ -161,23 +135,26 @@ sudo docker build -f docker/hailo8/abandoned_luggage.dockerfile -t abandoned-lug
 
 | 键 | 默认 | 说明 |
 |----|------|------|
-| `model.confidence` | 0.25 | 检测置信度阈值 |
+| `model.confidence` | 0.01 | 检测置信度阈值（与 RK 参考脚本一致） |
 | `model.iou` | 0.7 | NMS IoU |
 | `roi.rect` | [200,200,1100,800] | ROI 矩形（1920×1080 画面） |
 | `abandonment.dist_threshold` | 200 | owner 距离阈值（px） |
-| `abandonment.time_threshold` | 5 | 离开持续时间（秒） |
+| `abandonment.time_threshold` | 2 | 离开持续时间（秒，演示默认） |
 | `abandonment.alarm_hold` | 5 | 报警保持（秒） |
-| `abandonment.bag_persistence_frames` | 300 | 静态持久化帧数 |
+| `abandonment.bag_persistence_frames` | 300 | 仅行李的持久化帧数 |
+| `tracking.max_missed` | 30 | 轨迹缓存帧数；缓存不直接绘制 |
 | `tracking.match_iou` | 0.25 | 跟踪匹配 IoU |
 
-命令行覆盖：`--source`、`--output`、`--confidence`、`--iou`、`--device {hailo,cpu}`。
+命令行覆盖：`--source`、`--output`、`--confidence`、`--iou`、`--distance-threshold`、
+`--time-threshold`、`--device {hailo,cpu}`。接入实时摄像头后可再把 `time_threshold`
+调回 5 秒或更长。
 
 ---
 
 ## 测试（无硬件）
 
 ```bash
-python -m pytest tests/test_runtime.py -v   # 19 项：letterbox/NMS解码/跟踪/几何/配置/视频/导入/语法
+python -m pytest tests/test_runtime.py -v   # 23 项：letterbox/NMS解码/跟踪/几何/配置/视频/导入/语法
 python tools/check_deployment.py            # 结构 + HEF SHA-256（编译完成后自动校验）
 python app/infer_video_hailo.py --check-config
 python web_detection.py --check-config

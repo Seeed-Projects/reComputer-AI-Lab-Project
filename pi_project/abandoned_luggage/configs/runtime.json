@@ -5,24 +5,27 @@
   "model": {
     "path": "models/hef/yolov11m_abandoned_hailo8.hef",
     "imgsz": 640,
-    "confidence": 0.25,
+    "confidence": 0.01,
     "iou": 0.7,
     "input_mode": "uint8"
   },
   "roi": {
     "enabled": true,
+    "filter_detections": true,
+    "gray_outside": true,
     "rect": [200, 200, 1100, 800]
   },
   "abandonment": {
     "dist_threshold": 200,
-    "time_threshold": 5,
+    "time_threshold": 2,
     "alarm_hold": 5,
     "bag_persistence_frames": 300,
     "person_class": 0,
     "bag_classes": [24, 26, 28]
   },
   "tracking": {
-    "match_iou": 0.25
+    "match_iou": 0.25,
+    "max_missed": 30
   },
   "codec": "mp4v"
 }

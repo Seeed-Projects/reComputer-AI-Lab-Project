@@ -37,7 +37,7 @@ class IoUTracker:
         self.tracks: list[Track] = []
         self.next_id = 1
 
-    def update(self, boxes, confs, class_ids) -> list[Track]:
+    def update(self, boxes, confs, class_ids, include_missed: bool = True) -> list[Track]:
         pairs = []
         for ti, track in enumerate(self.tracks):
             for di, (box, cid) in enumerate(zip(boxes, class_ids)):
@@ -66,7 +66,10 @@ class IoUTracker:
                                          float(score)))
                 self.next_id += 1
         self.tracks = [t for t in self.tracks if t.missed <= self.max_missed]
-        return [t for t in self.tracks if t.hits >= self.min_hits]
+        visible = [t for t in self.tracks if t.hits >= self.min_hits]
+        if not include_missed:
+            visible = [t for t in visible if t.missed == 0]
+        return visible
 
     def reset(self) -> None:
         self.tracks.clear()

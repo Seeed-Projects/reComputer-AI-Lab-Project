@@ -39,7 +39,7 @@ class UltralyticsDetector:
         """Return (boxes_xyxy, confidences, class_ids) in original frame pixel space."""
         result = self._model.predict(
             frame_bgr, conf=self.conf, iou=self.iou, imgsz=self.imgsz,
-            device="cpu", verbose=False,
+            device="cpu", verbose=False, agnostic_nms=True,
         )[0]
         if self._first:
             logger.info("ultralytics result: %d detections (CPU)", len(result.boxes))

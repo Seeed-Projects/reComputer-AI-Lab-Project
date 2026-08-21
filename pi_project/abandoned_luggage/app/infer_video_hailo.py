@@ -57,6 +57,10 @@ def main() -> int:
     parser.add_argument("--output", help="output annotated video path")
     parser.add_argument("--confidence", type=float, help="override model.confidence")
     parser.add_argument("--iou", type=float, help="override model.iou")
+    parser.add_argument("--distance-threshold", type=float,
+                        help="override abandonment.dist_threshold")
+    parser.add_argument("--time-threshold", type=float,
+                        help="override abandonment.time_threshold (seconds)")
     parser.add_argument("--device", default="hailo", choices=["hailo", "cpu"],
                         help="hailo = Hailo-8 (Pi); cpu = Ultralytics demo on PC")
     parser.add_argument("--no-fps-overlay", action="store_true", help="hide FPS/info overlay")
@@ -68,6 +72,10 @@ def main() -> int:
         cfg["model"]["confidence"] = args.confidence
     if args.iou is not None:
         cfg["model"]["iou"] = args.iou
+    if args.distance_threshold is not None:
+        cfg.setdefault("abandonment", {})["dist_threshold"] = args.distance_threshold
+    if args.time_threshold is not None:
+        cfg.setdefault("abandonment", {})["time_threshold"] = args.time_threshold
     errors = validate_config(cfg, require_model=not args.check_config)
     if errors:
         for error in errors:
@@ -115,11 +123,11 @@ def main() -> int:
             instant = 1.0 / max(now - previous, 1e-6)
             previous = now
             fps_ema = instant if not fps_ema else 0.9 * fps_ema + 0.1 * instant
+            frames += 1
             total_alarms += int(status["abandoned"] > 0)
             if not args.no_fps_overlay:
-                _draw_overlay(annotated, fps_ema, status)
+                _draw_overlay(annotated, frames, fps_ema, status)
             writer.write(annotated)
-            frames += 1
             if frames % 30 == 0:
                 logger.info("frame=%d fps=%.1f persons=%d bags=%d abandoned=%d",
                             frames, fps_ema, status["persons"], status["bags"],
@@ -137,16 +145,22 @@ def main() -> int:
     return 0
 
 
-def _draw_overlay(frame, fps_ema: float, status: dict) -> None:
-    abandoned = status["abandoned"]
-    cv2.rectangle(frame, (8, 8), (520, 96), (20, 20, 20), -1)
-    cv2.putText(frame, f"FPS {fps_ema:.1f}", (18, 32), cv2.FONT_HERSHEY_SIMPLEX,
-                0.66, (90, 255, 130), 2, cv2.LINE_AA)
-    cv2.putText(frame, f"persons={status['persons']}  bags={status['bags']}  static={status['static_bags']}",
-                (18, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 210, 60), 2, cv2.LINE_AA)
-    color = (0, 0, 255) if abandoned else (200, 200, 200)
-    cv2.putText(frame, f"ABANDONED={abandoned}", (18, 90), cv2.FONT_HERSHEY_SIMPLEX,
-                0.55, color, 2, cv2.LINE_AA)
+def _draw_overlay(frame, frame_id: int, fps_ema: float, status: dict) -> None:
+    """Use the compact text overlay from the RK reference video."""
+    cv2.putText(
+        frame,
+        f"Frame:{frame_id} | FPS:{fps_ema:.1f} | Bags:{status['bags']}",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.82,
+        (0, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    if status["abandoned"]:
+        alert = f"ABANDONED: {status['abandoned']}"
+        cv2.putText(frame, alert, (20, 78), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.72, (0, 0, 255), 2, cv2.LINE_AA)
 
 
 if __name__ == "__main__":
