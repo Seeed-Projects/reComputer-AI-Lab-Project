@@ -185,7 +185,45 @@ class ProcessorResetTests(unittest.TestCase):
         self.assertEqual(processor.abandoned_flags, {})
         self.assertEqual(processor.alarm_hold_until, {})
         self.assertEqual(processor.static_bags, {})
+        self.assertEqual(processor.bag_confirmation_counts, {})
         self.assertEqual(processor.frame_id, 0)
+
+
+class BagFilteringTests(unittest.TestCase):
+    def setUp(self):
+        self.cfg = json.loads((ROOT / "configs/runtime.json").read_text(encoding="utf-8"))
+
+        class FakeDetector:
+            def predict(self, frame):
+                return [], [], []
+
+            def release(self):
+                pass
+
+        self.processor = AbandonedProcessor(self.cfg, ROOT, detector=FakeDetector())
+
+    def test_bag_zone_excludes_aircraft_and_keeps_people(self):
+        boxes = [
+            [800, 220, 960, 580],  # aircraft underside: bag center above bag zone
+            [740, 560, 1040, 820], # white suitcase: center inside bag zone
+            [220, 220, 460, 700],  # person: valid in full person ROI
+        ]
+        selected = self.processor._select_detections(boxes, [0.9] * 3, [26, 28, 0], 1920, 1080)
+        self.assertEqual([item[2] for item in selected], [28, 0])
+
+    def test_bag_requires_consecutive_confirmations(self):
+        class FakeDetector:
+            def predict(self, frame):
+                return [[740, 560, 1040, 820]], [0.9], [28]
+
+            def release(self):
+                pass
+
+        processor = AbandonedProcessor(self.cfg, ROOT, detector=FakeDetector())
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        self.assertEqual(processor.process(frame)[1]["bags"], 0)
+        self.assertEqual(processor.process(frame)[1]["bags"], 0)
+        self.assertEqual(processor.process(frame)[1]["bags"], 1)
 
 
 class ConfigTests(unittest.TestCase):
@@ -203,6 +241,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(sorted(ab["bag_classes"]), [24, 26, 28])
         self.assertGreater(ab["dist_threshold"], 0)
         self.assertGreater(ab["time_threshold"], 0)
+        self.assertEqual(ab["bag_confirm_frames"], 3)
+        self.assertEqual(self.cfg["roi"]["bag_rect"], [200, 500, 1100, 800])
 
     def test_all_json_valid(self):
         for jf in (ROOT / "configs").glob("*.json"):

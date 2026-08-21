@@ -40,9 +40,10 @@ def validate_config(cfg: dict, require_model=True) -> list[str]:
                 errors.append(f"model.{name} must be between 0 and 1")
     roi = cfg.get("roi", {})
     if roi.get("enabled", True):
-        rect = roi.get("rect", [200, 200, 1100, 800])
-        if len(rect) != 4 or not all(isinstance(v, (int, float)) for v in rect):
-            errors.append("roi.rect must be [x1, y1, x2, y2]")
+        for name in ("rect", "bag_rect"):
+            rect = roi.get(name, [200, 200, 1100, 800])
+            if len(rect) != 4 or not all(isinstance(v, (int, float)) for v in rect):
+                errors.append(f"roi.{name} must be [x1, y1, x2, y2]")
     return errors
 
 

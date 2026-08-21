@@ -90,7 +90,11 @@ class AbandonedProcessor:
         roi_cfg = cfg.get("roi", {})
         self.roi_enabled = bool(roi_cfg.get("enabled", True))
         self.roi_rect = [int(v) for v in roi_cfg.get("rect", [200, 200, 1100, 800])]
-        # The reference draws the ROI but does not filter detections by it.
+        # The lower bag zone rejects background detections from the aircraft
+        # and a person's upper body while preserving the full person ROI.
+        self.bag_roi_rect = [
+            int(v) for v in roi_cfg.get("bag_rect", self.roi_rect)
+        ]
         self.roi_filter_detections = bool(roi_cfg.get("filter_detections", False))
         self.gray_outside_roi = bool(roi_cfg.get("gray_outside", True))
 
@@ -100,6 +104,9 @@ class AbandonedProcessor:
         self.alarm_hold = float(abandonment.get("alarm_hold", 0))
         self.bag_persistence_frames = max(
             0, int(abandonment.get("bag_persistence_frames", 0))
+        )
+        self.bag_confirm_frames = max(
+            1, int(abandonment.get("bag_confirm_frames", 1))
         )
         self.bag_classes = {
             int(value) for value in abandonment.get("bag_classes", sorted(DEFAULT_BAG_CLASSES))
@@ -120,6 +127,7 @@ class AbandonedProcessor:
         self.abandoned_flags: dict[int, bool] = {}
         self.alarm_hold_until: dict[int, float] = {}
         self.static_bags: dict[int, dict] = {}
+        self.bag_confirmation_counts: dict[int, int] = {}
         self.frame_id = 0
 
     def _is_person(self, class_id: int) -> bool:
@@ -130,13 +138,15 @@ class AbandonedProcessor:
 
     def _select_detections(self, boxes, confs, class_ids, width, height):
         """Keep only person/bag detections, matching the RK loop's split."""
-        roi = self.roi_rect if self.roi_enabled else [0, 0, width, height]
+        person_roi = self.roi_rect if self.roi_enabled else [0, 0, width, height]
+        bag_roi = self.bag_roi_rect if self.roi_enabled else person_roi
         selected = []
         for box, score, class_id in zip(boxes, confs, class_ids):
             class_id = int(class_id)
             if not (self._is_person(class_id) or self._is_bag(class_id)):
                 continue
-            if self.roi_filter_detections and not box_center_in_rect(box, roi):
+            detection_roi = bag_roi if self._is_bag(class_id) else person_roi
+            if self.roi_filter_detections and not box_center_in_rect(box, detection_roi):
                 continue
             selected.append((box, score, class_id))
         return selected
@@ -210,17 +220,25 @@ class AbandonedProcessor:
                     self.away_start.pop(bag_id, None)
                     self.abandoned_flags.pop(bag_id, None)
                     self.alarm_hold_until.pop(bag_id, None)
+                    self.bag_confirmation_counts.pop(bag_id, None)
 
         persons = []  # (track_id, center_x, center_y, box)
         bags = []    # (track_id, center_x, center_y, box, class_id, persist)
         active_bag_ids = set()
         used_static_ids = set()
+        current_bag_track_ids = set()
         for track in tracks:
             x1, y1, x2, y2 = track.box
             center = ((x1 + x2) / 2, (y1 + y2) / 2)
             if self._is_person(track.cls):
                 persons.append((track.id, center[0], center[1], track.box))
             elif self._is_bag(track.cls):
+                current_bag_track_ids.add(track.id)
+                confirmed = self.bag_confirmation_counts.get(track.id, 0) + 1
+                if confirmed < self.bag_confirm_frames:
+                    self.bag_confirmation_counts[track.id] = confirmed
+                    continue
+                self.bag_confirmation_counts.pop(track.id, None)
                 bag_id = self._match_static_bag(track, used_static_ids)
                 used_static_ids.add(bag_id)
                 active_bag_ids.add(bag_id)
@@ -231,6 +249,12 @@ class AbandonedProcessor:
                         "last_seen": self.frame_id,
                     }
                 bags.append((bag_id, center[0], center[1], track.box, track.cls, False))
+
+        # Confirmation must be consecutive. A one- or two-frame false box
+        # from Hailo never becomes a persisted or alarmable luggage item.
+        for bag_id in list(self.bag_confirmation_counts):
+            if bag_id not in current_bag_track_ids:
+                self.bag_confirmation_counts.pop(bag_id, None)
 
         # Persist luggage only. A missed person is never synthesized.
         if self.bag_persistence_frames > 0:
@@ -323,4 +347,5 @@ class AbandonedProcessor:
         self.abandoned_flags.clear()
         self.alarm_hold_until.clear()
         self.static_bags.clear()
+        self.bag_confirmation_counts.clear()
         self.frame_id = 0

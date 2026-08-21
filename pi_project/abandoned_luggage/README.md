@@ -51,13 +51,15 @@ RaspberryPi5-Hailo8-abandoned-luggage/
 ## 算法（忠实移植原项目）
 
 1. **检测**：YOLO11m 检测 COCO-80；只保留 person(0)、backpack(24)、handbag(26)、suitcase(28)
-2. **ROI 过滤**：仅处理矩形 ROI 内中心点的检测（默认 `[200,200,1100,800]`，对应 1920×1080）
+2. **ROI 过滤**：人物使用主 ROI（默认 `[200,200,1100,800]`）；行李使用地面行李区
+   `roi.bag_rect`（默认 `[200,500,1100,800]`），排除飞机、上半身等背景误检
 3. **跟踪**：IoU 跟踪器按类别分配持久 ID（Hailo NMS 无跟踪 ID，替代原 ByteTrack）；丢失轨迹只用于重新接回 ID
 4. **Owner 关联**：每个行李关联最近的人
 5. **遗弃判定**：owner 距离 > `dist_threshold`(200px) **或** owner 消失，
    持续 > `time_threshold`(2s，演示默认) → 报警
-6. **静态行李**：行李短时漏检时保持最后位置最多 `bag_persistence_frames`(300帧)，人物不做持久化
-7. **输出**：只绘制当前帧人物和当前/持久化行李，避免把丢失人物轨迹误画成重复框
+6. **行李确认**：同一行李须连续检测 `bag_confirm_frames`(3帧) 才进入追踪、持久化和报警
+7. **静态行李**：行李短时漏检时保持最后位置最多 `bag_persistence_frames`(300帧)，人物不做持久化
+8. **输出**：只绘制当前帧人物和当前/持久化行李，避免把丢失人物轨迹误画成重复框
 
 ### 框颜色
 
@@ -138,10 +140,12 @@ sudo docker build -f docker/hailo8/abandoned_luggage.dockerfile -t abandoned-lug
 | `model.confidence` | 0.01 | 检测置信度阈值（与 RK 参考脚本一致） |
 | `model.iou` | 0.7 | NMS IoU |
 | `roi.rect` | [200,200,1100,800] | ROI 矩形（1920×1080 画面） |
+| `roi.bag_rect` | [200,500,1100,800] | 行李地面检测区域，避免背景误检 |
 | `abandonment.dist_threshold` | 200 | owner 距离阈值（px） |
 | `abandonment.time_threshold` | 2 | 离开持续时间（秒，演示默认） |
 | `abandonment.alarm_hold` | 5 | 报警保持（秒） |
 | `abandonment.bag_persistence_frames` | 300 | 仅行李的持久化帧数 |
+| `abandonment.bag_confirm_frames` | 3 | 行李连续确认帧数，未确认框不会报警 |
 | `tracking.max_missed` | 30 | 轨迹缓存帧数；缓存不直接绘制 |
 | `tracking.match_iou` | 0.25 | 跟踪匹配 IoU |
 
@@ -154,7 +158,7 @@ sudo docker build -f docker/hailo8/abandoned_luggage.dockerfile -t abandoned-lug
 ## 测试（无硬件）
 
 ```bash
-python -m pytest tests/test_runtime.py -v   # 23 项：letterbox/NMS解码/跟踪/几何/配置/视频/导入/语法
+python -m pytest tests/test_runtime.py -v   # 26 项：letterbox/NMS解码/跟踪/几何/过滤/配置/视频/导入/语法
 python tools/check_deployment.py            # 结构 + HEF SHA-256（编译完成后自动校验）
 python app/infer_video_hailo.py --check-config
 python web_detection.py --check-config

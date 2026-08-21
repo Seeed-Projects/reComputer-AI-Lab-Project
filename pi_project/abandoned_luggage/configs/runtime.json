@@ -13,13 +13,15 @@
     "enabled": true,
     "filter_detections": true,
     "gray_outside": true,
-    "rect": [200, 200, 1100, 800]
+    "rect": [200, 200, 1100, 800],
+    "bag_rect": [200, 500, 1100, 800]
   },
   "abandonment": {
     "dist_threshold": 200,
     "time_threshold": 2,
     "alarm_hold": 5,
     "bag_persistence_frames": 300,
+    "bag_confirm_frames": 3,
     "person_class": 0,
     "bag_classes": [24, 26, 28]
   },
