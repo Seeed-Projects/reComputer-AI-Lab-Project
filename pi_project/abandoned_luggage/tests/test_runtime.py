@@ -25,6 +25,7 @@ from runtime.yolo_postprocess import (  # noqa: E402
 )
 from abandoned_monitor.tracker import IoUTracker, box_iou  # noqa: E402
 from abandoned_monitor.processor import (  # noqa: E402
+    AbandonedProcessor,
     box_center_in_rect,
     point_in_rect,
 )
@@ -154,6 +155,37 @@ class TrackerTests(unittest.TestCase):
         tracker.update([[10, 10, 30, 30]], [0.8], [24])
         tracker.reset()
         self.assertEqual(tracker.tracks, [])
+
+
+class ProcessorResetTests(unittest.TestCase):
+    def test_reset_clears_state_between_looped_video_passes(self):
+        cfg = json.loads((ROOT / "configs/runtime.json").read_text(encoding="utf-8"))
+
+        class FakeDetector:
+            def predict(self, frame):
+                return [], [], []
+
+            def release(self):
+                pass
+
+        processor = AbandonedProcessor(cfg, ROOT, detector=FakeDetector())
+        processor.tracker.update([[10, 10, 30, 30]], [0.9], [24])
+        processor.bag_owner[1] = 2
+        processor.away_start[1] = 10.0
+        processor.abandoned_flags[1] = True
+        processor.alarm_hold_until[1] = 20.0
+        processor.static_bags[1] = {"xyxy": [10, 10, 30, 30], "cid": 24, "last_seen": 9}
+        processor.frame_id = 9
+
+        processor.reset()
+
+        self.assertEqual(processor.tracker.tracks, [])
+        self.assertEqual(processor.bag_owner, {})
+        self.assertEqual(processor.away_start, {})
+        self.assertEqual(processor.abandoned_flags, {})
+        self.assertEqual(processor.alarm_hold_until, {})
+        self.assertEqual(processor.static_bags, {})
+        self.assertEqual(processor.frame_id, 0)
 
 
 class ConfigTests(unittest.TestCase):

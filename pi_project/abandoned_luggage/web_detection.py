@@ -111,6 +111,10 @@ class WebRuntime:
                 if not ok:
                     if self.cfg.get("loop_video", False) and not isinstance(self.source, int):
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        processor.reset()
+                        frame_id, alarm_frames = 0, 0
+                        self.update(frame=0, persons=0, bags=0, static_bags=0,
+                                    abandoned=0, alarm_frames=0)
                         continue
                     break
                 annotated, values = processor.process(frame)

@@ -309,3 +309,18 @@ class AbandonedProcessor:
 
     def release(self):
         self.detector.release()
+
+    def reset(self):
+        """Clear per-video tracking and alarm state without recreating HailoRT.
+
+        The web preview can loop a finite video indefinitely.  A new pass of
+        that video must be treated like a new source: owner IDs, persisted
+        luggage and active alarms from the preceding pass are not valid.
+        """
+        self.tracker.reset()
+        self.bag_owner.clear()
+        self.away_start.clear()
+        self.abandoned_flags.clear()
+        self.alarm_hold_until.clear()
+        self.static_bags.clear()
+        self.frame_id = 0
