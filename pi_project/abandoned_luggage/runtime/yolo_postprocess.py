@@ -54,17 +54,18 @@ def postprocess_hailo_nms(output, img_h: int, img_w: int, conf: float, iou: floa
       - [1, M, 5] single class
     """
     value = output
-    if isinstance(value, np.ndarray) and value.dtype == object:
-        # HailoRT NMS layout for C classes: object array of shape (1, C)
-        # (or (C,)); element c holds proposals (N_c, 5) in YXYX+score order.
-        arr = value
+    if isinstance(value, (list, tuple)) or (isinstance(value, np.ndarray) and value.dtype == object):
+        # HailoRT NMS layout for C classes: per-class chunks of (N_c, 5) in
+        # YXYX+score order — exposed either as a ragged object ndarray (1, C)
+        # or as a ragged Python list of C items.
+        arr = np.asarray(value, dtype=object) if isinstance(value, (list, tuple)) else value
         while arr.ndim > 1 and arr.shape[0] == 1:
             arr = arr[0]
         chunks = []
         for c, item in enumerate(arr):
             if item is None:
                 continue
-            rows = np.asarray(item)
+            rows = np.asarray(item, dtype=np.float32)
             if rows.ndim == 0 or rows.size == 0:
                 continue
             rows = rows.reshape(-1, rows.shape[-1])
@@ -124,6 +125,9 @@ def postprocess_auto(outputs: Mapping[str, np.ndarray] | Sequence[np.ndarray],
     if len(tensors) != 1:
         raise RuntimeError(
             "HEF must expose one Hailo NMS output; got "
-            + str([np.asarray(x).shape for x in tensors])
+            + str([len(t) if isinstance(t, (list, tuple)) else np.shape(x)
+                   for t in tensors for x in [t]])
         )
-    return postprocess_hailo_nms(np.asarray(tensors[0]), img_h, img_w, conf, iou, imgsz)
+    # NOTE: do not np.asarray() the tensor here — HailoRT NMS output is a ragged
+    # per-class list/object array and asarray() would raise on inhomogeneous data.
+    return postprocess_hailo_nms(tensors[0], img_h, img_w, conf, iou, imgsz)

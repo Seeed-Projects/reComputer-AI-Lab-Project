@@ -92,6 +92,16 @@ class PrePostProcessTests(unittest.TestCase):
         boxes, scores, cids = postprocess_hailo_nms(obj, 640, 640, 0.2, 0.5, 640)
         self.assertEqual(cids, [24])
 
+    def test_nms_ragged_list_like_hailort(self):
+        """Real HailoRT vstream output: ragged Python list of C per-class arrays."""
+        ragged = [None] * 80
+        ragged[0] = np.array([[0.1, 0.1, 0.2, 0.2, 0.9]])
+        ragged[24] = np.array([[0.3, 0.3, 0.45, 0.45, 0.8]])
+        ragged[28] = [[0.6, 0.2, 0.75, 0.4, 0.85]]
+        boxes, scores, cids = postprocess_auto(
+            {"yolov11m/yolov8_nms_postprocess": ragged}, 640, 640, 0.2, 0.5, 640)
+        self.assertEqual(sorted(cids), [0, 24, 28])
+
     def test_postprocess_auto_routes(self):
         output = {"yolov11m_nms_postprocess": np.array([[[0.2, 0.2, 0.4, 0.4, 0.8, 28.0]]])}
         boxes, scores, cids = postprocess_auto(output, 640, 640, 0.2, 0.5, 640)
