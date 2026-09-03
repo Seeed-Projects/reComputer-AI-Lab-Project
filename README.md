@@ -20,6 +20,12 @@ ghcr.io/seeed-projects/recomputer-ai-lab-project/pothole_detection:latest
 ghcr.io/seeed-projects/recomputer-ai-lab-project/abandoned_luggage:latest
 ```
 
+## RK3576 projects
+
+| Project | Hardware | Description |
+| --- | --- | --- |
+| [Pull-up Counter](rk_project/pullup_counter/README.md) | reComputer RK3576 | YOLO11 Pose pull-up counting with RKNN NPU inference and a browser dashboard |
+
 ## Container definitions
 
 Hailo-8 Dockerfiles are stored under `docker/hailo8/`. Each Dockerfile uses its
