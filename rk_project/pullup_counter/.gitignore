@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+video/output/*
+!video/output/.gitkeep
+*.log
+*.pid
