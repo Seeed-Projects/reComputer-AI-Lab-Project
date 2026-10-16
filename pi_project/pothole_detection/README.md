@@ -2,6 +2,8 @@
 
 基于 YOLOv8n 的路面坑洞检测项目，运行在 Raspberry Pi 5 + Hailo-8 加速器上。
 支持视频批量推理和 Web 实时预览，带 ROI 道路区域过滤、短时跟踪补框和累计事件计数。
+默认在当前帧检测到的坑洞上叠加橙红色半透明覆盖和轮廓描边，保留底下的路面纹理。
+覆盖区域由检测框内的 GrabCut 估计，不是分割模型的精确掩膜。详见 [覆盖效果与配置](SURFACE_OVERLAY.md)。
 
 ---
 
@@ -211,6 +213,23 @@ sudo docker pull \
   ghcr.io/seeed-projects/recomputer-ai-lab-project/pothole_detection:latest
 ```
 
+拉取新镜像后需停止并重建旧容器，新创建的 Web/视频任务默认启用半透明覆盖。
+已有 `configs/` 挂载也受支持：未配置 `overlay` 时默认开启；可添加以下配置调整效果：
+
+```json
+"overlay": {
+  "enabled": true,
+  "opacity": 0.34,
+  "color_bgr": [30, 110, 255],
+  "show_boxes": true,
+  "mask_size": 128,
+  "smoothing": 0.4
+}
+```
+
+设置 `enabled: false` 关闭覆盖。黄色跟踪补框没有当前帧直接检测，因此只画框、不填充。
+覆盖计算会增加 CPU 开销，树莓派实际 FPS 需要板端测量。
+
 ### 本地构建
 
 ```bash
@@ -285,7 +304,7 @@ sudo docker build \
 
 | 框颜色 | 含义 | 触发条件 |
 |--------|------|----------|
-| **橙色** `(255,90,20)` | Hailo 当前帧直接检测到 | 本帧 NMS 输出有检测框，经 ROI 过滤后匹配到已有 track |
+| **橙红色** BGR `(30,110,255)` | 当前检测框、估计轮廓及半透明填充 | 当前帧直接检测，轮廓提取成功时填充 |
 | **黄色** `(0,200,255)` | 跟踪补框（gap-fill） | 该 track 在前几帧被检测到，但本帧未检测到（missed ≤ max_missed） |
 
 补框逻辑：

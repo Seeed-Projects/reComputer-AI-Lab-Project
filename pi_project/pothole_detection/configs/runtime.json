@@ -21,5 +21,13 @@
     "max_missed": 3,
     "strong_confidence": 0.55
   },
+  "overlay": {
+    "enabled": true,
+    "opacity": 0.34,
+    "color_bgr": [30, 110, 255],
+    "show_boxes": true,
+    "mask_size": 128,
+    "smoothing": 0.4
+  },
   "codec": "mp4v"
 }
